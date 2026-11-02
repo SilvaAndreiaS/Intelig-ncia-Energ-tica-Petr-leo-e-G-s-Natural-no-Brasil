@@ -1,116 +1,182 @@
-IDENTIFICATION DIVISION.
-       PROGRAM-ID. PRODUCAO-PARAMS.
-       AUTHOR. ENGENHARIA-DE-DADOS.
+identification division.
+program-id. producao-energetica.
 
-       ENVIRONMENT DIVISION.
-       CONFIGURATION SECTION.
-       SPECIAL-NAMES.
-           DECIMAL-POINT IS COMMA.
+environment division.
+input-output section.
+file-control.
+    select arquivo-csv assign to nome-arquivo
+        organization is line sequential
+        file status is status-arquivo.
 
-       DATA DIVISION.
-       WORKING-STORAGE SECTION.
-       01  WS-LINHA-COMANDO        PIC X(120) VALUE SPACES.
-       01  WS-STR-POCO             PIC X(15) VALUE SPACES.
-       01  WS-STR-OLEO             PIC X(10) VALUE SPACES.
-       01  WS-STR-GAS              PIC X(10) VALUE SPACES.
-       01  WS-STR-BRENT            PIC X(08) VALUE SPACES.
-       01  WS-STR-PRECO-GAS        PIC X(06) VALUE SPACES.
+data division.
+file section.
+fd arquivo-csv.
+01 linha-csv pic x(256).
 
-       01  WS-VOL-OLEO-BBL         PIC 9(07)V99 VALUE ZERO.
-       01  WS-VOL-GAS-M3           PIC 9(08)V99 VALUE ZERO.
-       01  WS-PRECO-BRENT          PIC 9(04)V99 VALUE ZERO.
-       01  WS-PRECO-GAS            PIC 9(03)V99 VALUE ZERO.
+working-storage section.
+01 nome-arquivo pic x(256).
+01 status-arquivo pic xx.
+01 fim-arquivo pic x value "N".
+01 primeira-linha pic x value "S".
+01 linha-trabalho pic x(256).
+01 campo-mes pic x(10).
+01 campo-petroleo pic x(20).
+01 campo-gas pic x(20).
+01 campo-pre-sal pic x(20).
+01 campo-queima pic x(20).
+01 ponteiro binary-long.
+01 indice binary-long.
+01 tamanho-linha binary-long.
+01 valor-numerico pic 9(12)v9(3) value zero.
+01 petroleo pic 9(12)v9(3) value zero.
+01 gas-milhoes pic 9(8)v9(3) value zero.
+01 pre-sal pic 99v9 value zero.
+01 queima-milhoes pic 9(8)v9(3) value zero.
+01 gas-boe pic 9(12)v9(3) value zero.
+01 total-boe pic 9(12)v9(3) value zero.
+01 total-petroleo pic 9(15)v9(3) value zero.
+01 total-gas-boe pic 9(15)v9(3) value zero.
+01 total-boe-geral pic 9(15)v9(3) value zero.
+01 total-queima pic 9(12)v9(3) value zero.
+01 quantidade-registros binary-long value zero.
+01 saida-petroleo pic ZZZ,ZZZ,ZZZ,ZZ9.999.
+01 saida-gas pic ZZZ,ZZZ,ZZ9.999.
+01 saida-total pic ZZZ,ZZZ,ZZZ,ZZ9.999.
+01 saida-queima pic ZZZ,ZZZ,ZZ9.999.
 
-       01  WS-FATOR-CONV-GAS       PIC 9(01)V9999 VALUE 6,2898.
-       01  WS-TAXA-ROYALTY         PIC 9(02)V99   VALUE 0,10.
+procedure division.
+principal.
+    move "data/producao_exemplo.csv" to nome-arquivo
+    accept nome-arquivo from command-line
+    if nome-arquivo = spaces
+        move "data/producao_exemplo.csv" to nome-arquivo
+    end-if
 
-       01  WS-GAS-BOE              PIC 9(07)V99 VALUE ZERO.
-       01  WS-TOTAL-BOE            PIC 9(08)V99 VALUE ZERO.
-       01  WS-REC-OLEO             PIC 9(10)V99 VALUE ZERO.
-       01  WS-REC-GAS              PIC 9(10)V99 VALUE ZERO.
-       01  WS-RECEITA-BRUTA        PIC 9(11)V99 VALUE ZERO.
-       01  WS-VALOR-ROYALTIES      PIC 9(10)V99 VALUE ZERO.
-       01  WS-RECEITA-LIQUIDA      PIC 9(11)V99 VALUE ZERO.
+    open input arquivo-csv
+    if status-arquivo not = "00"
+        display "ERRO: nao foi possivel abrir o arquivo: "
+            function trim(nome-arquivo)
+        display "Informe o caminho do CSV como argumento."
+        move 1 to return-code
+        stop run
+    end-if
 
-       01  WS-F-OLEO               PIC Z.ZZZ.ZZ9,99.
-       01  WS-F-GAS                PIC ZZZ.ZZZ.ZZ9,99.
-       01  WS-F-GAS-BOE            PIC Z.ZZZ.ZZ9,99.
-       01  WS-F-TOTAL-BOE          PIC ZZ.ZZZ.ZZ9,99.
-       01  WS-F-REC-BRUTA          PIC $ZZZ.ZZZ.ZZ9,99.
-       01  WS-F-ROYALTIES          PIC $ZZZ.ZZZ.ZZ9,99.
-       01  WS-F-REC-LIQUIDA        PIC $ZZZ.ZZZ.ZZ9,99.
+    display "======================================================"
+    display " INTELIGENCIA ENERGETICA - PETROLEO E GAS (COBOL)"
+    display "======================================================"
+    display "Arquivo: " function trim(nome-arquivo)
+    display "Conversao ilustrativa: 1 milhao m3 gas = 6,2898 milhoes boe"
+    display " "
 
-       PROCEDURE DIVISION.
-       MAIN-PROCEDURE.
-           ACCEPT WS-LINHA-COMANDO FROM COMMAND-LINE.
+    perform until fim-arquivo = "S"
+        read arquivo-csv
+            at end
+                move "S" to fim-arquivo
+            not at end
+                if primeira-linha = "S"
+                    move "N" to primeira-linha
+                else
+                    perform processar-linha
+                end-if
+        end-read
+    end-perform
+    close arquivo-csv
 
-           IF WS-LINHA-COMANDO = SPACES
-               PERFORM 900-EXIBIR-AJUDA
-               STOP RUN
-           END-IF.
+    move total-petroleo to saida-petroleo
+    move total-gas-boe to saida-gas
+    move total-boe-geral to saida-total
+    move total-queima to saida-queima
 
-           UNSTRING WS-LINHA-COMANDO DELIMITED BY ALL SPACES
-               INTO WS-STR-POCO
-                    WS-STR-OLEO
-                    WS-STR-GAS
-                    WS-STR-BRENT
-                    WS-STR-PRECO-GAS.
+    display " "
+    display "---------------- RESUMO ----------------"
+    display "Registros processados: " quantidade-registros
+    display "Petroleo acumulado (soma das taxas diarias): "
+        function trim(saida-petroleo)
+    display "Gas convertido em boe/d (soma das taxas): "
+        function trim(saida-gas)
+    display "Total equivalente estimado (boe/d somado): "
+        function trim(saida-total)
+    display "Queima de gas acumulada (soma das taxas): "
+        function trim(saida-queima)
+    display " "
+    display "Nota: somar taxas de meses diferentes nao representa"
+    display "uma producao anual. Use os valores por periodo para"
+    display "comparacoes temporais e valide a fonte dos dados."
+    move 0 to return-code
+    stop run.
 
-           FUNCTION NUMVAL(WS-STR-OLEO)      INTO WS-VOL-OLEO-BBL.
-           FUNCTION NUMVAL(WS-STR-GAS)       INTO WS-VOL-GAS-M3.
-           FUNCTION NUMVAL(WS-STR-BRENT)     INTO WS-PRECO-BRENT.
-           FUNCTION NUMVAL(WS-STR-PRECO-GAS) INTO WS-PRECO-GAS.
+processar-linha.
+    move spaces to campo-mes campo-petroleo campo-gas
+                   campo-pre-sal campo-queima
+    move 1 to ponteiro
+    move 1 to indice
+    move 0 to tamanho-linha
+    move linha-csv to linha-trabalho
+    compute tamanho-linha =
+        function length(function trim(linha-trabalho trailing))
 
-           PERFORM 200-CALCULOS.
-           PERFORM 300-EXIBIR-RELATORIO.
-           STOP RUN.
+    perform until indice > tamanho-linha or ponteiro > 5
+        if linha-trabalho(indice:1) = ","
+            add 1 to ponteiro
+        else
+            evaluate ponteiro
+                when 1
+                    move linha-trabalho(indice:1)
+                      to campo-mes(function length(function trim(campo-mes trailing)) + 1:1)
+                when 2
+                    move linha-trabalho(indice:1)
+                      to campo-petroleo(function length(function trim(campo-petroleo trailing)) + 1:1)
+                when 3
+                    move linha-trabalho(indice:1)
+                      to campo-gas(function length(function trim(campo-gas trailing)) + 1:1)
+                when 4
+                    move linha-trabalho(indice:1)
+                      to campo-pre-sal(function length(function trim(campo-pre-sal trailing)) + 1:1)
+                when 5
+                    move linha-trabalho(indice:1)
+                      to campo-queima(function length(function trim(campo-queima trailing)) + 1:1)
+            end-evaluate
+        end-if
+        add 1 to indice
+    end-perform
 
-       200-CALCULOS.
-           COMPUTE WS-GAS-BOE ROUNDED = 
-               (WS-VOL-GAS-M3 / 1000) * WS-FATOR-CONV-GAS.
+    if campo-mes = spaces
+        exit paragraph
+    end-if
 
-           COMPUTE WS-TOTAL-BOE = 
-               WS-VOL-OLEO-BBL + WS-GAS-BOE.
+    if function test-numval(function trim(campo-petroleo)) = 0
+        compute petroleo = function numval(campo-petroleo)
+    else
+        move 0 to petroleo
+    end-if
+    if function test-numval(function trim(campo-gas)) = 0
+        compute gas-milhoes = function numval(campo-gas)
+    else
+        move 0 to gas-milhoes
+    end-if
+    if function test-numval(function trim(campo-pre-sal)) = 0
+        compute pre-sal = function numval(campo-pre-sal)
+    else
+        move 0 to pre-sal
+    end-if
+    if function test-numval(function trim(campo-queima)) = 0
+        compute queima-milhoes = function numval(campo-queima)
+    else
+        move 0 to queima-milhoes
+    end-if
 
-           COMPUTE WS-REC-OLEO ROUNDED = 
-               WS-VOL-OLEO-BBL * WS-PRECO-BRENT.
+    compute gas-boe = gas-milhoes * 1000000 * 6.2898
+    compute total-boe = petroleo + gas-boe
+    add petroleo to total-petroleo
+    add gas-boe to total-gas-boe
+    add total-boe to total-boe-geral
+    add queima-milhoes to total-queima
+    add 1 to quantidade-registros
 
-           COMPUTE WS-REC-GAS ROUNDED = 
-               WS-VOL-GAS-M3 * WS-PRECO-GAS.
-
-           COMPUTE WS-RECEITA-BRUTA = 
-               WS-REC-OLEO + WS-REC-GAS.
-
-           COMPUTE WS-VALOR-ROYALTIES ROUNDED = 
-               WS-RECEITA-BRUTA * WS-TAXA-ROYALTY.
-
-           COMPUTE WS-RECEITA-LIQUIDA = 
-               WS-RECEITA-BRUTA - WS-VALOR-ROYALTIES.
-
-       300-EXIBIR-RELATORIO.
-           MOVE WS-VOL-OLEO-BBL    TO WS-F-OLEO.
-           MOVE WS-VOL-GAS-M3      TO WS-F-GAS.
-           MOVE WS-GAS-BOE         TO WS-F-GAS-BOE.
-           MOVE WS-TOTAL-BOE       TO WS-F-TOTAL-BOE.
-           MOVE WS-RECEITA-BRUTA   TO WS-F-REC-BRUTA.
-           MOVE WS-VALOR-ROYALTIES TO WS-F-ROYALTIES.
-           MOVE WS-RECEITA-LIQUIDA TO WS-F-REC-LIQUIDA.
-
-           DISPLAY "==================================================".
-           DISPLAY "      RELATORIO DE PRODUCAO - PARAMETRIZADO       ".
-           DISPLAY "==================================================".
-           DISPLAY "POCO/PLATAFORMA     : " WS-STR-POCO.
-           DISPLAY "--------------------------------------------------".
-           DISPLAY "PRODUCAO OLEO (BBL) : " WS-F-OLEO.
-           DISPLAY "PRODUCAO GAS (M3)   : " WS-F-GAS.
-           DISPLAY "GAS EQUIVALENTE BOE : " WS-F-GAS-BOE.
-           DISPLAY "TOTAL PRODUZIDO BOE : " WS-F-TOTAL-BOE.
-           DISPLAY "--------------------------------------------------".
-           DISPLAY "RECEITA BRUTA (USD) : " WS-F-REC-BRUTA.
-           DISPLAY "ROYALTIES DEV. (10%): " WS-F-ROYALTIES.
-           DISPLAY "RECEITA LIQUIDA     : " WS-F-REC-LIQUIDA.
-           DISPLAY "==================================================".
-
-       900-EXIBIR-AJUDA.
-           DISPLAY "ERRO: Parametros nao informados!".
-           DISPLAY "Uso: ./producao_params <POCO> <OLEO> <GAS> <PRECO_BRENT> <PRECO_GAS>".
+    move petroleo to saida-petroleo
+    display "Periodo: " campo-mes
+        " | Petroleo bbl/d: " function trim(saida-petroleo)
+    display "  Gas (milhoes m3/d): " gas-milhoes
+        " | Pre-sal (%): " pre-sal
+        " | Queima (milhoes m3/d): " queima-milhoes
+    .

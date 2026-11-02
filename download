@@ -1,0 +1,6 @@
+producao
+producao.exe
+*.o
+*.so
+*.dll
+*.log
