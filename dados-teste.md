@@ -1,4 +1,4 @@
-# Dados de teste — 12.345 linhas
+# Dados de teste
 
 O arquivo `producao_teste_12345.csv` contém exatamente 12.345 registros de dados sintéticos,
 além da linha de cabeçalho. Os números foram gerados artificialmente para testar leitura de CSV,
