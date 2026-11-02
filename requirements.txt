@@ -1,1 +1,1 @@
-# Sem dependências externas. Requer compilador COBOL (GnuCOBOL recomendado).
+# Sem dependências externas. Requer compilador COBOL .
